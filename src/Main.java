@@ -27,10 +27,6 @@ public class Main {
     static SimpleMatrix y = trainingData();  // n3 by m
     static SimpleMatrix Y = y.transpose();  // m by n3
 
-    public static void main(String[] args) {
-        feedForward();
-    }
-
     public static SimpleMatrix inputData() {
         SimpleMatrix out = SimpleMatrix.ones(m, n[0]);
         out.set(0, 0, 150);
@@ -71,6 +67,12 @@ public class Main {
         return out;
     }
 
+    public static void main(String[] args) {
+        SimpleMatrix yHat = feedForward();
+        double cost = calcCost(yHat);
+        System.out.println(cost);
+    }
+
     public static SimpleMatrix sigmoid(SimpleMatrix mat) {
         Equation eq = new Equation();
         eq.alias(mat, "mat");
@@ -78,7 +80,7 @@ public class Main {
         return eq.lookupSimple("out");
     }
 
-    public static void feedForward() {
+    public static SimpleMatrix feedForward() {
         SimpleMatrix Z1 = W[1].mult(A0).plus(b[1]);
         SimpleMatrix A1 = sigmoid(Z1);
 
@@ -90,5 +92,38 @@ public class Main {
 
         System.out.println(A3);
         MatrixUtils.printMatrixArray(A3.toArray2());
+        return A3;
+    }
+
+    public static double calcCost(SimpleMatrix yHat) {
+        double summed = 0;
+        for (int i = 0; i < m; i++) {
+            double yI = Y.get(i);
+            double yHatI = yHat.get(i);
+            double c = yI == 0 ? 1 - yHatI : yHatI;
+//            if (yI == 0) {
+//                c = 1 - yHatI;
+//            } else {
+//                c = yHatI;
+//            }
+            summed -= Math.log(c);
+//            System.out.println(yI);
+//            System.out.println(yHatI);
+//            double c = yI * Math.log(yHatI + (1 - yI) * Math.log(1 - yHatI));
+//            System.out.println(c);
+//            summed -= c;
+        }
+//        System.out.println(summed);
+        //        Equation eq = new Equation();
+//        eq.alias(yHat, "yHat", Y, "Y");
+//        eq.process("out = -( (Y * log(yHat) + (1 - Y)*log(1 - yHat)) )");
+//        SimpleMatrix losses = eq.lookupSimple("out");
+//        SimpleMatrix m = losses.reshape(-1);
+//        double summed =
+        return (1d / m) * summed;
+    }
+
+    public static void backProp(double cost) {
+
     }
 }
