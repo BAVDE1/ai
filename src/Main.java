@@ -6,21 +6,21 @@ import java.util.HashMap;
 
 public class Main {
     static public class BackPropValues {
-        SimpleMatrix costWeights;
-        SimpleMatrix costBiases;
-        SimpleMatrix costPropagator;
+        SimpleMatrix weightGradient;
+        SimpleMatrix biasGradient;
+        SimpleMatrix propagator;
 
-        public BackPropValues(SimpleMatrix costWeights, SimpleMatrix costBiases, SimpleMatrix costPropagator) {
-            this.costWeights = costWeights;
-            this.costBiases = costBiases;
-            this.costPropagator = costPropagator;
+        public BackPropValues(SimpleMatrix weightGradient, SimpleMatrix biasGradient, SimpleMatrix propagator) {
+            this.weightGradient = weightGradient;
+            this.biasGradient = biasGradient;
+            this.propagator = propagator;
         }
     }
 
     static final int EPOCHS = 1000;
     static final double ALPHA = 0.1;  // learning rate
     static final ArrayList<Double> costHistory = new ArrayList<>();
-    static final HashMap<String, SimpleMatrix> activationCache = new HashMap<>();
+    static final HashMap<Integer, SimpleMatrix> activationCache = new HashMap<>();
 
     static int trainingDataCount = 10;
     static int[] layerNodes = new int[]{2, 3, 3, 1};
@@ -45,16 +45,26 @@ public class Main {
     // inputs: weight, height
     public static SimpleMatrix inputData() {
         SimpleMatrix out = SimpleMatrix.ones(trainingDataCount, layerNodes[0]);  // m by n0
-        out.set(0, 0, 150);out.set(0, 1, 70);
-        out.set(1, 0, 254);out.set(1, 1, 73);
-        out.set(2, 0, 312);out.set(2, 1, 68);
-        out.set(3, 0, 120);out.set(3, 1, 60);
-        out.set(4, 0, 154);out.set(4, 1, 61);
-        out.set(5, 0, 212);out.set(5, 1, 65);
-        out.set(6, 0, 216);out.set(6, 1, 67);
-        out.set(7, 0, 145);out.set(7, 1, 67);
-        out.set(8, 0, 184);out.set(8, 1, 64);
-        out.set(9, 0, 130);out.set(9, 1, 69);
+        out.set(0, 0, 150);
+        out.set(0, 1, 70);
+        out.set(1, 0, 254);
+        out.set(1, 1, 73);
+        out.set(2, 0, 312);
+        out.set(2, 1, 68);
+        out.set(3, 0, 120);
+        out.set(3, 1, 60);
+        out.set(4, 0, 154);
+        out.set(4, 1, 61);
+        out.set(5, 0, 212);
+        out.set(5, 1, 65);
+        out.set(6, 0, 216);
+        out.set(6, 1, 67);
+        out.set(7, 0, 145);
+        out.set(7, 1, 67);
+        out.set(8, 0, 184);
+        out.set(8, 1, 64);
+        out.set(9, 0, 130);
+        out.set(9, 1, 69);
 
         // find mean & deviation
         double meanWeight = 0;
@@ -109,13 +119,15 @@ public class Main {
             if (epoch % 20 == 0) System.out.printf("[%s] %s%n", epoch, cost);
 
             // backpropagation
-            BackPropValues bpv3 = backPropLayer3(yHat);
-            BackPropValues bpv2 = backPropLayer2(bpv3);
-            BackPropValues bpv1 = backPropLayer1(bpv2);
+            HashMap<Integer, BackPropValues> bpvs = new HashMap<>();
+            bpvs.put(layerNodes.length-1, backPropOutputLayer(yHat));
+            for (int l = layerNodes.length-2; l > 0; l--) {
+                bpvs.put(l, backPropHiddenLayer(bpvs.get(l+1), l));
+            }
 
             // update weights
             Equation eqW = new Equation();
-            eqW.alias(ALPHA, "a", bpv3.costWeights, "w3", bpv2.costWeights, "w2", bpv1.costWeights, "w1");
+            eqW.alias(ALPHA, "a", bpvs.get(3).weightGradient, "w3", bpvs.get(2).weightGradient, "w2", bpvs.get(1).weightGradient, "w1");
             eqW.process("w3_out = a * w3");
             eqW.process("w2_out = a * w2");
             eqW.process("w1_out = a * w1");
@@ -125,7 +137,7 @@ public class Main {
 
             // update biases
             Equation eqB = new Equation();
-            eqB.alias(ALPHA, "a", bpv3.costBiases, "b3", bpv2.costBiases, "b2", bpv1.costBiases, "b1");
+            eqB.alias(ALPHA, "a", bpvs.get(3).biasGradient, "b3", bpvs.get(2).biasGradient, "b2", bpvs.get(1).biasGradient, "b1");
             eqB.process("b3_out = a * b3");
             eqB.process("b2_out = a * b2");
             eqB.process("b1_out = a * b1");
@@ -133,6 +145,7 @@ public class Main {
             biases[2] = biases[2].minus(MatrixUtils.broadcast(eqB.lookupSimple("b2_out"), trainingDataCount));
             biases[1] = biases[1].minus(MatrixUtils.broadcast(eqB.lookupSimple("b1_out"), trainingDataCount));
         }
+        System.out.printf("starting cost: %s%n", costHistory.getFirst());
         System.out.printf("final cost: %s%n", costHistory.getLast());
     }
 
@@ -144,24 +157,19 @@ public class Main {
     }
 
     public static SimpleMatrix feedForward(SimpleMatrix input) {
-        SimpleMatrix A0 = input.transpose();  // from m by n0 to n0 by m
-
-        SimpleMatrix Z1 = weights[1].mult(A0).plus(biases[1]);
-        SimpleMatrix A1 = sigmoid(Z1);
-
-        SimpleMatrix Z2 = weights[2].mult(A1).plus(biases[2]);
-        SimpleMatrix A2 = sigmoid(Z2);
-
-        SimpleMatrix Z3 = weights[3].mult(A2).plus(biases[3]);
-        SimpleMatrix A3 = sigmoid(Z3);
-
         activationCache.clear();
-        activationCache.put("A0", A0);
-        activationCache.put("A1", A1);
-        activationCache.put("A2", A2);
-        return A3;
+        SimpleMatrix activatedValues = input.transpose();  // from m by n0 to n0 by m
+        activationCache.put(0, activatedValues);
+
+        for (int i = 1; i < layerNodes.length; i++) {
+            SimpleMatrix nodeValues = weights[i].mult(activatedValues).plus(biases[i]);
+            activatedValues = sigmoid(nodeValues);
+            activationCache.put(i, activatedValues);
+        }
+        return activatedValues;
     }
 
+    // binary cross entropy loss summed (except i changed it, so its probably doing something else lol oops)
     public static double calcCost(SimpleMatrix yHat) {
         double summedLosses = 0;
         for (int i = 0; i < trainingDataCount; i++) {
@@ -173,81 +181,57 @@ public class Main {
         return (1d / trainingDataCount) * summedLosses;
     }
 
-    public static BackPropValues backPropLayer3(SimpleMatrix A3) {
-        SimpleMatrix A2 = activationCache.get("A2");
-        SimpleMatrix W3 = weights[3];
-
-        Equation eq = new Equation();
-        eq.alias(A3, "A3", outputLabels, "Y", trainingDataCount, "m");
-        eq.process("out = (1.0 / m) * (A3 - Y)");
-        SimpleMatrix dC_dZ3 = eq.lookupSimple("out");
-
-        // weights
-        SimpleMatrix dC_dW3 = dC_dZ3.mult(A2.transpose());
-
-        // biases
-        SimpleMatrix dC_db3 = SimpleMatrix.filled(layerNodes[3], 1, 0);
-        for (int i = 0; i < layerNodes[3]; i++) {
-            for (int j = 0; j < dC_dZ3.getNumCols(); j++) {  // compress (sum) columns into one axis
-                dC_db3.set(i, dC_db3.get(i) + dC_dZ3.get(i, j));
-            }
-        }
-
-        // for continuing the chain to the next layer, the propagator
-        SimpleMatrix dC_dA2 = W3.transpose().mult(dC_dZ3);
-        return new BackPropValues(dC_dW3, dC_db3, dC_dA2);
+    // finds dC_dW[l]
+    public static SimpleMatrix weightsGradient(SimpleMatrix dC_dZl, SimpleMatrix activatedValuesPrev) {
+        return dC_dZl.mult(activatedValuesPrev.transpose());
     }
 
-    public static BackPropValues backPropLayer2(BackPropValues bpv3) {
-        SimpleMatrix A1 = activationCache.get("A1");
-        SimpleMatrix A2 = activationCache.get("A2");
-        SimpleMatrix W2 = weights[2];
-
-        // sigmoid derivation ( sigmoid'(z) = sigmoid(z) * (1-sigmoid(z)) )
-        Equation eq = new Equation();
-        eq.alias(A2, "A2", bpv3.costPropagator, "dC_dA2");
-        eq.process("out = dC_dA2 .* (A2 .* (1 - A2))");  // .* is element-wise multiplication
-        SimpleMatrix dC_dZ2 = eq.lookupSimple("out");
-
-        // weights
-        SimpleMatrix dC_dW2 = dC_dZ2.mult(A1.transpose());
-
-        // biases
-        SimpleMatrix dC_db2 = SimpleMatrix.filled(layerNodes[2], 1, 0);
-        for (int i = 0; i < layerNodes[2]; i++) {
-            for (int j = 0; j < dC_dW2.getNumCols(); j++) {  // compress (sum) columns into one axis
-                dC_db2.set(i, dC_db2.get(i) + dC_dW2.get(i, j));
+    // finds dC_db[l]
+    public static SimpleMatrix biasesGradient(SimpleMatrix dC_dZl, int layer) {
+        SimpleMatrix dC_dbl = SimpleMatrix.filled(layerNodes[layer], 1, 0);
+        for (int i = 0; i < layerNodes[layer]; i++) {
+            for (int j = 0; j < dC_dZl.getNumCols(); j++) {  // compress (sum) columns into one axis
+                dC_dbl.set(i, dC_dbl.get(i) + dC_dZl.get(i, j));
             }
         }
-
-        // propagator
-        SimpleMatrix dC_dA1 = W2.transpose().mult(dC_dZ2);
-        return new BackPropValues(dC_dW2, dC_db2, dC_dA1);
+        return dC_dbl;
     }
 
-    public static BackPropValues backPropLayer1(BackPropValues bpv2) {
-        SimpleMatrix A0 = activationCache.get("A0");
-        SimpleMatrix A1 = activationCache.get("A1");
-        SimpleMatrix W1 = weights[1];
+    // finds dC_dA[l-1]
+    public static SimpleMatrix calcPropagator(SimpleMatrix dC_dZl, int layer) {
+        return weights[layer].transpose().mult(dC_dZl);
+    }
 
-        // sigmoid derivation ( sigmoid'(z) = sigmoid(z) * (1-sigmoid(z)) )
+    public static BackPropValues backPropOutputLayer(SimpleMatrix yHat) {
+        int layer = layerNodes.length - 1;
+        SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);
+
         Equation eq = new Equation();
-        eq.alias(A1, "A1", bpv2.costPropagator, "dC_dA1");
-        eq.process("out = dC_dA1 .* (A1 .* (1 - A1))");  // .* is element-wise multiplication
-        SimpleMatrix dC_dZ1 = eq.lookupSimple("out");
+        eq.alias(yHat, "yHat", outputLabels, "Y", trainingDataCount, "m");
+        eq.process("out = (1.0 / m) * (yHat - Y)");
+        SimpleMatrix dC_dZl = eq.lookupSimple("out");
 
-        // weights
-        SimpleMatrix dC_dW1 = dC_dZ1.mult(A0.transpose());
+        return new BackPropValues(
+                weightsGradient(dC_dZl, activatedValuesPrev),
+                biasesGradient(dC_dZl, layer),
+                calcPropagator(dC_dZl, layer)
+        );
+    }
 
-        // biases
-        SimpleMatrix dC_db1 = SimpleMatrix.filled(layerNodes[1], 1, 0);
-        for (int i = 0; i < layerNodes[2]; i++) {
-            for (int j = 0; j < dC_dW1.getNumCols(); j++) {  // compress (sum) columns into one axis
-                dC_db1.set(i, dC_db1.get(i) + dC_dW1.get(i, j));
-            }
-        }
+    public static BackPropValues backPropHiddenLayer(BackPropValues previousLayerValues, int layer) {
+        SimpleMatrix activatedValues = activationCache.get(layer);
+        SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);
 
-        // no propagator needed, this is last layer
-        return new BackPropValues(dC_dW1, dC_db1, null);
+        // sigmoid derivation: sigmoid'(z) = sigmoid(z) * (1-sigmoid(z))
+        Equation eq = new Equation();
+        eq.alias(activatedValues, "Al", previousLayerValues.propagator, "dC_dAl_m1");
+        eq.process("out = dC_dAl_m1 .* (Al .* (1 - Al))");  // .* is element-wise multiplication
+        SimpleMatrix dC_dZl = eq.lookupSimple("out");
+
+        return new BackPropValues(
+                weightsGradient(dC_dZl, activatedValuesPrev),
+                biasesGradient(dC_dZl, layer),
+                calcPropagator(dC_dZl, layer)
+        );
     }
 }
