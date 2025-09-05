@@ -25,19 +25,8 @@ public class Main {
     static int trainingDataCount = 10;
     static int[] layerNodes = new int[]{2, 3, 3, 1};
 
-    static SimpleMatrix[] weights = new SimpleMatrix[]{
-            null,
-            MatrixUtils.randomGaussianMat(layerNodes[1], layerNodes[0]),
-            MatrixUtils.randomGaussianMat(layerNodes[2], layerNodes[1]),
-            MatrixUtils.randomGaussianMat(layerNodes[3], layerNodes[2])
-    };
-
-    static SimpleMatrix[] biases = new SimpleMatrix[]{
-            null,
-            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[1], 1), trainingDataCount),
-            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[2], 1), trainingDataCount),
-            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[3], 1), trainingDataCount)
-    };
+    static SimpleMatrix[] weights = new SimpleMatrix[layerNodes.length];
+    static SimpleMatrix[] biases = new SimpleMatrix[layerNodes.length];
 
     static SimpleMatrix inputData = inputData();  // n0 by m
     static SimpleMatrix outputLabels = outputLabels();  // n3 by m
@@ -95,7 +84,7 @@ public class Main {
 
     // do they have cardiovascular disease lol
     public static SimpleMatrix outputLabels() {
-        SimpleMatrix out = SimpleMatrix.ones(layerNodes[3], trainingDataCount);
+        SimpleMatrix out = SimpleMatrix.ones(layerNodes[layerNodes.length-1], trainingDataCount);
         out.set(0, 0);
         out.set(1, 1);
         out.set(2, 1);
@@ -109,7 +98,16 @@ public class Main {
         return out;
     }
 
+    public static void setupWeightsAndBiases() {
+        for (int l = 1; l < layerNodes.length; l++) {
+            weights[l] = MatrixUtils.randomGaussianMat(layerNodes[l], layerNodes[l-1]);
+            biases[l] = MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[l], 1), trainingDataCount);
+        }
+    }
+
     public static void main(String[] args) {
+        setupWeightsAndBiases();
+
         for (int epoch = 0; epoch < EPOCHS; epoch++) {
             SimpleMatrix yHat = feedForward(inputData);  // A3, the output, the clanker's prediction!
 
@@ -132,7 +130,7 @@ public class Main {
             }
         }
         System.out.printf("starting cost: %s%n", costHistory.getFirst());
-        System.out.printf("final cost: %s [epoch %s]%n", costHistory.getLast(), EPOCHS);
+        System.out.printf("final cost: %s [%s epochs]%n", costHistory.getLast(), EPOCHS);
     }
 
     public static SimpleMatrix sigmoid(SimpleMatrix mat) {
