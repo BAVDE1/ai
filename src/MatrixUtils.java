@@ -19,6 +19,10 @@ public class MatrixUtils {
         return out;
     }
 
+    public static void printMatrixArray(SimpleMatrix mat) {
+        printMatrixArray(mat.toArray2());
+    }
+
     public static void printMatrixArray(double[][] array) {
         for (double[] row : array) {
             for (double val : row) System.out.print(val + " ");

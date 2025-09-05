@@ -39,9 +39,10 @@ public class Main {
             MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[3], 1), trainingDataCount)
     };
 
+    static SimpleMatrix inputData = inputData();
+
     // training labels
     static SimpleMatrix trainingData = trainingData();  // n3 by m
-//    static SimpleMatrix Y = y.transpose();  // m by n3
 
     // inputs: weight, height
     public static SimpleMatrix inputData() {
@@ -56,6 +57,31 @@ public class Main {
         out.set(7, 0, 145);out.set(7, 1, 67);
         out.set(8, 0, 184);out.set(8, 1, 64);
         out.set(9, 0, 130);out.set(9, 1, 69);
+
+        // find standard scaling values
+        double meanWeight = 0;
+        double meanHeight = 0;
+        for (int i = 0; i < trainingDataCount; i++) {
+            meanWeight += out.get(i, 0);
+            meanHeight += out.get(i, 1);
+        }
+        meanWeight /= trainingDataCount;
+        meanHeight /= trainingDataCount;
+
+        double deviationWeight = 0;
+        double deviationHeight = 0;
+        for (int i = 0; i < trainingDataCount; i++) {
+            deviationWeight += Math.pow(out.get(i, 0) - meanWeight, 2);
+            deviationHeight += Math.pow(out.get(i, 1) - meanHeight, 2);
+        }
+        deviationWeight = Math.sqrt(deviationWeight / trainingDataCount);
+        deviationHeight = Math.sqrt(deviationHeight / trainingDataCount);
+
+        // apply standard scaling
+        for (int i = 0; i < trainingDataCount; i++) {
+            out.set(i * 2, (out.get(i, 0) - meanWeight) / deviationWeight);
+            out.set(i * 2 + 1, (out.get(i, 1) - meanHeight) / deviationHeight);
+        }
         return out;
     }
 
@@ -77,12 +103,14 @@ public class Main {
 
     public static void main(String[] args) {
         for (int epoch = 0; epoch < EPOCHS; epoch++) {
-            SimpleMatrix yHat = feedForward(inputData());  // A3, the output, the clanker's prediction!
+            SimpleMatrix yHat = feedForward(inputData);  // A3, the output, the clanker's prediction!
 
-            double cost = calcCost(yHat);  // the error
+            // find the error
+            double cost = calcCost(yHat);
             costHistory.add(cost);
             System.out.println(cost);
 
+            // backpropagation
             BackPropValues bpv3 = backPropLayer3(yHat);
             BackPropValues bpv2 = backPropLayer2(bpv3);
             BackPropValues bpv1 = backPropLayer1(bpv2);
