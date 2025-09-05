@@ -17,7 +17,7 @@ public class Main {
         }
     }
 
-    static final int EPOCHS = 100;
+    static final int EPOCHS = 1000;
     static final double ALPHA = 0.1;  // learning rate
     static final ArrayList<Double> costHistory = new ArrayList<>();
     static final HashMap<String, SimpleMatrix> activationCache = new HashMap<>();
@@ -39,10 +39,8 @@ public class Main {
             MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[3], 1), trainingDataCount)
     };
 
-    static SimpleMatrix inputData = inputData();
-
-    // training labels
-    static SimpleMatrix trainingData = trainingData();  // n3 by m
+    static SimpleMatrix inputData = inputData();  // n0 by m
+    static SimpleMatrix outputLabels = outputLabels();  // n3 by m
 
     // inputs: weight, height
     public static SimpleMatrix inputData() {
@@ -58,7 +56,7 @@ public class Main {
         out.set(8, 0, 184);out.set(8, 1, 64);
         out.set(9, 0, 130);out.set(9, 1, 69);
 
-        // find standard scaling values
+        // find mean & deviation
         double meanWeight = 0;
         double meanHeight = 0;
         for (int i = 0; i < trainingDataCount; i++) {
@@ -86,7 +84,7 @@ public class Main {
     }
 
     // do they have cardiovascular disease lol
-    public static SimpleMatrix trainingData() {
+    public static SimpleMatrix outputLabels() {
         SimpleMatrix out = SimpleMatrix.ones(layerNodes[3], trainingDataCount);
         out.set(0, 0);
         out.set(1, 1);
@@ -108,7 +106,7 @@ public class Main {
             // find the error
             double cost = calcCost(yHat);
             costHistory.add(cost);
-            System.out.println(cost);
+            if (epoch % 20 == 0) System.out.printf("[%s] %s%n", epoch, cost);
 
             // backpropagation
             BackPropValues bpv3 = backPropLayer3(yHat);
@@ -135,6 +133,7 @@ public class Main {
             biases[2] = biases[2].minus(MatrixUtils.broadcast(eqB.lookupSimple("b2_out"), trainingDataCount));
             biases[1] = biases[1].minus(MatrixUtils.broadcast(eqB.lookupSimple("b1_out"), trainingDataCount));
         }
+        System.out.printf("final cost: %s%n", costHistory.getLast());
     }
 
     public static SimpleMatrix sigmoid(SimpleMatrix mat) {
@@ -166,7 +165,7 @@ public class Main {
     public static double calcCost(SimpleMatrix yHat) {
         double summedLosses = 0;
         for (int i = 0; i < trainingDataCount; i++) {
-            double yI = trainingData.get(i);
+            double yI = outputLabels.get(i);
             double yHatI = yHat.get(i);
             double loss = yI == 0 ? 1 - yHatI : yHatI;
             summedLosses -= Math.log(loss);
@@ -179,7 +178,7 @@ public class Main {
         SimpleMatrix W3 = weights[3];
 
         Equation eq = new Equation();
-        eq.alias(A3, "A3", trainingData, "Y", trainingDataCount, "m");
+        eq.alias(A3, "A3", outputLabels, "Y", trainingDataCount, "m");
         eq.process("out = (1.0 / m) * (A3 - Y)");
         SimpleMatrix dC_dZ3 = eq.lookupSimple("out");
 
