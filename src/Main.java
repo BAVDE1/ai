@@ -2,9 +2,7 @@ import org.ejml.equation.Equation;
 import org.ejml.simple.SimpleMatrix;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Random;
 
 public class Main {
     static public class BackPropValues {
@@ -24,29 +22,30 @@ public class Main {
     static final ArrayList<Double> costHistory = new ArrayList<>();
     static final HashMap<String, SimpleMatrix> activationCache = new HashMap<>();
 
-    static int m = 10;
-    static int[] n = new int[]{2, 3, 3, 1};
+    static int trainingDataCount = 10;
+    static int[] layerNodes = new int[]{2, 3, 3, 1};
 
-    static SimpleMatrix[] W = new SimpleMatrix[]{
+    static SimpleMatrix[] weights = new SimpleMatrix[]{
             null,
-            MatrixUtils.randomGaussianMat(n[1], n[0]),
-            MatrixUtils.randomGaussianMat(n[2], n[1]),
-            MatrixUtils.randomGaussianMat(n[3], n[2])
+            MatrixUtils.randomGaussianMat(layerNodes[1], layerNodes[0]),
+            MatrixUtils.randomGaussianMat(layerNodes[2], layerNodes[1]),
+            MatrixUtils.randomGaussianMat(layerNodes[3], layerNodes[2])
     };
 
-    static SimpleMatrix[] b = new SimpleMatrix[]{
+    static SimpleMatrix[] biases = new SimpleMatrix[]{
             null,
-            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(n[1], 1), m),
-            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(n[2], 1), m),
-            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(n[3], 1), m)
+            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[1], 1), trainingDataCount),
+            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[2], 1), trainingDataCount),
+            MatrixUtils.broadcast(MatrixUtils.randomGaussianMat(layerNodes[3], 1), trainingDataCount)
     };
 
     // training labels
-    static SimpleMatrix Y = trainingData();  // n3 by m
+    static SimpleMatrix trainingData = trainingData();  // n3 by m
 //    static SimpleMatrix Y = y.transpose();  // m by n3
 
+    // inputs: weight, height
     public static SimpleMatrix inputData() {
-        SimpleMatrix out = SimpleMatrix.ones(m, n[0]);
+        SimpleMatrix out = SimpleMatrix.ones(trainingDataCount, layerNodes[0]);  // m by n0
         out.set(0, 0, 150);out.set(0, 1, 70);
         out.set(1, 0, 254);out.set(1, 1, 73);
         out.set(2, 0, 312);out.set(2, 1, 68);
@@ -60,8 +59,9 @@ public class Main {
         return out;
     }
 
+    // do they have cardiovascular disease lol
     public static SimpleMatrix trainingData() {
-        SimpleMatrix out = SimpleMatrix.ones(n[3], m);
+        SimpleMatrix out = SimpleMatrix.ones(layerNodes[3], trainingDataCount);
         out.set(0, 0);
         out.set(1, 1);
         out.set(2, 1);
@@ -77,12 +77,10 @@ public class Main {
 
     public static void main(String[] args) {
         for (int epoch = 0; epoch < EPOCHS; epoch++) {
-            SimpleMatrix yHat = feedForward(inputData());
+            SimpleMatrix yHat = feedForward(inputData());  // A3, the output, the clanker's prediction!
 
-            double cost = calcCost(yHat);  // error
+            double cost = calcCost(yHat);  // the error
             costHistory.add(cost);
-
-//            MatrixUtils.printMatrixArray(yHat.toArray2());
             System.out.println(cost);
 
             BackPropValues bpv3 = backPropLayer3(yHat);
@@ -95,9 +93,9 @@ public class Main {
             eqW.process("w3_out = a * w3");
             eqW.process("w2_out = a * w2");
             eqW.process("w1_out = a * w1");
-            W[3] = W[3].minus(eqW.lookupSimple("w3_out"));
-            W[2] = W[2].minus(eqW.lookupSimple("w2_out"));
-            W[1] = W[1].minus(eqW.lookupSimple("w1_out"));
+            weights[3] = weights[3].minus(eqW.lookupSimple("w3_out"));
+            weights[2] = weights[2].minus(eqW.lookupSimple("w2_out"));
+            weights[1] = weights[1].minus(eqW.lookupSimple("w1_out"));
 
             // update biases
             Equation eqB = new Equation();
@@ -105,9 +103,9 @@ public class Main {
             eqB.process("b3_out = a * b3");
             eqB.process("b2_out = a * b2");
             eqB.process("b1_out = a * b1");
-            b[3] = b[3].minus(MatrixUtils.broadcast(eqB.lookupSimple("b3_out"), m));
-            b[2] = b[2].minus(MatrixUtils.broadcast(eqB.lookupSimple("b2_out"), m));
-            b[1] = b[1].minus(MatrixUtils.broadcast(eqB.lookupSimple("b1_out"), m));
+            biases[3] = biases[3].minus(MatrixUtils.broadcast(eqB.lookupSimple("b3_out"), trainingDataCount));
+            biases[2] = biases[2].minus(MatrixUtils.broadcast(eqB.lookupSimple("b2_out"), trainingDataCount));
+            biases[1] = biases[1].minus(MatrixUtils.broadcast(eqB.lookupSimple("b1_out"), trainingDataCount));
         }
     }
 
@@ -121,13 +119,13 @@ public class Main {
     public static SimpleMatrix feedForward(SimpleMatrix input) {
         SimpleMatrix A0 = input.transpose();  // from m by n0 to n0 by m
 
-        SimpleMatrix Z1 = W[1].mult(A0).plus(b[1]);
+        SimpleMatrix Z1 = weights[1].mult(A0).plus(biases[1]);
         SimpleMatrix A1 = sigmoid(Z1);
 
-        SimpleMatrix Z2 = W[2].mult(A1).plus(b[2]);
+        SimpleMatrix Z2 = weights[2].mult(A1).plus(biases[2]);
         SimpleMatrix A2 = sigmoid(Z2);
 
-        SimpleMatrix Z3 = W[3].mult(A2).plus(b[3]);
+        SimpleMatrix Z3 = weights[3].mult(A2).plus(biases[3]);
         SimpleMatrix A3 = sigmoid(Z3);
 
         activationCache.clear();
@@ -139,101 +137,90 @@ public class Main {
 
     public static double calcCost(SimpleMatrix yHat) {
         double summedLosses = 0;
-        for (int i = 0; i < m; i++) {
-            double yI = Y.get(i);
+        for (int i = 0; i < trainingDataCount; i++) {
+            double yI = trainingData.get(i);
             double yHatI = yHat.get(i);
             double loss = yI == 0 ? 1 - yHatI : yHatI;
             summedLosses -= Math.log(loss);
         }
-        return (1d / m) * summedLosses;
+        return (1d / trainingDataCount) * summedLosses;
     }
 
     public static BackPropValues backPropLayer3(SimpleMatrix A3) {
         SimpleMatrix A2 = activationCache.get("A2");
-        SimpleMatrix W3 = W[3];
+        SimpleMatrix W3 = weights[3];
 
         Equation eq = new Equation();
-        eq.alias(A3, "A3", Y, "Y", m, "m");
+        eq.alias(A3, "A3", trainingData, "Y", trainingDataCount, "m");
         eq.process("out = (1.0 / m) * (A3 - Y)");
         SimpleMatrix dC_dZ3 = eq.lookupSimple("out");
-//        MatrixUtils.printMatrixArray(dC_dZ3.toArray2());
 
         // weights
         SimpleMatrix dC_dW3 = dC_dZ3.mult(A2.transpose());
-//        MatrixUtils.printMatrixArray(dC_dW3.toArray2());
 
         // biases
-        SimpleMatrix dC_db3 = SimpleMatrix.filled(n[3], 1, 0);
-        for (int i = 0; i < n[3]; i++) {
+        SimpleMatrix dC_db3 = SimpleMatrix.filled(layerNodes[3], 1, 0);
+        for (int i = 0; i < layerNodes[3]; i++) {
             for (int j = 0; j < dC_dZ3.getNumCols(); j++) {  // compress (sum) columns into one axis
                 dC_db3.set(i, dC_db3.get(i) + dC_dZ3.get(i, j));
             }
         }
-//        MatrixUtils.printMatrixArray(dC_db3.toArray2());
 
-        // for continuing the chain to the next layer
+        // for continuing the chain to the next layer, the propagator
         SimpleMatrix dC_dA2 = W3.transpose().mult(dC_dZ3);
-//        System.out.println(dC_dA2);
         return new BackPropValues(dC_dW3, dC_db3, dC_dA2);
     }
 
     public static BackPropValues backPropLayer2(BackPropValues bpv3) {
         SimpleMatrix A1 = activationCache.get("A1");
         SimpleMatrix A2 = activationCache.get("A2");
-        SimpleMatrix W2 = W[2];
+        SimpleMatrix W2 = weights[2];
 
         // sigmoid derivation ( sigmoid'(z) = sigmoid(z) * (1-sigmoid(z)) )
         Equation eq = new Equation();
         eq.alias(A2, "A2", bpv3.costPropagator, "dC_dA2");
         eq.process("out = dC_dA2 .* (A2 .* (1 - A2))");  // .* is element-wise multiplication
         SimpleMatrix dC_dZ2 = eq.lookupSimple("out");
-//        System.out.println(dC_dZ2);
 
         // weights
-        SimpleMatrix dZ2_dW2 = A1;
-        SimpleMatrix dC_dW2 = dC_dZ2.mult(dZ2_dW2.transpose());
-//        System.out.println(dC_dW2);
+        SimpleMatrix dC_dW2 = dC_dZ2.mult(A1.transpose());
 
         // biases
-        SimpleMatrix dC_db2 = SimpleMatrix.filled(n[2], 1, 0);
-        for (int i = 0; i < n[2]; i++) {
+        SimpleMatrix dC_db2 = SimpleMatrix.filled(layerNodes[2], 1, 0);
+        for (int i = 0; i < layerNodes[2]; i++) {
             for (int j = 0; j < dC_dW2.getNumCols(); j++) {  // compress (sum) columns into one axis
                 dC_db2.set(i, dC_db2.get(i) + dC_dW2.get(i, j));
             }
         }
-//        System.out.println(dC_db2);
 
         // propagator
         SimpleMatrix dC_dA1 = W2.transpose().mult(dC_dZ2);
-//        System.out.println(dC_dA1);
         return new BackPropValues(dC_dW2, dC_db2, dC_dA1);
     }
 
     public static BackPropValues backPropLayer1(BackPropValues bpv2) {
         SimpleMatrix A0 = activationCache.get("A0");
         SimpleMatrix A1 = activationCache.get("A1");
-        SimpleMatrix W1 = W[1];
+        SimpleMatrix W1 = weights[1];
 
         // sigmoid derivation ( sigmoid'(z) = sigmoid(z) * (1-sigmoid(z)) )
         Equation eq = new Equation();
         eq.alias(A1, "A1", bpv2.costPropagator, "dC_dA1");
         eq.process("out = dC_dA1 .* (A1 .* (1 - A1))");  // .* is element-wise multiplication
         SimpleMatrix dC_dZ1 = eq.lookupSimple("out");
-//        System.out.println(dC_dZ1);
 
         // weights
-        SimpleMatrix dZ2_dW1 = A0;
-        SimpleMatrix dC_dW1 = dC_dZ1.mult(dZ2_dW1.transpose());
-//        System.out.println(dC_dW1);
+        SimpleMatrix dC_dW1 = dC_dZ1.mult(A0.transpose());
 
         // biases
-        SimpleMatrix dC_db1 = SimpleMatrix.filled(n[1], 1, 0);
-        for (int i = 0; i < n[2]; i++) {
+        SimpleMatrix dC_db1 = SimpleMatrix.filled(layerNodes[1], 1, 0);
+        for (int i = 0; i < layerNodes[2]; i++) {
             for (int j = 0; j < dC_dW1.getNumCols(); j++) {  // compress (sum) columns into one axis
                 dC_db1.set(i, dC_db1.get(i) + dC_dW1.get(i, j));
             }
         }
-//        System.out.println(dC_db1);
+
+        // no propagator needed, this is last layer
         return new BackPropValues(dC_dW1, dC_db1, null);
     }
 }
