@@ -125,28 +125,14 @@ public class Main {
                 bpvs.put(l, backPropHiddenLayer(bpvs.get(l+1), l));
             }
 
-            // update weights
-            Equation eqW = new Equation();
-            eqW.alias(ALPHA, "a", bpvs.get(3).weightGradient, "w3", bpvs.get(2).weightGradient, "w2", bpvs.get(1).weightGradient, "w1");
-            eqW.process("w3_out = a * w3");
-            eqW.process("w2_out = a * w2");
-            eqW.process("w1_out = a * w1");
-            weights[3] = weights[3].minus(eqW.lookupSimple("w3_out"));
-            weights[2] = weights[2].minus(eqW.lookupSimple("w2_out"));
-            weights[1] = weights[1].minus(eqW.lookupSimple("w1_out"));
-
-            // update biases
-            Equation eqB = new Equation();
-            eqB.alias(ALPHA, "a", bpvs.get(3).biasGradient, "b3", bpvs.get(2).biasGradient, "b2", bpvs.get(1).biasGradient, "b1");
-            eqB.process("b3_out = a * b3");
-            eqB.process("b2_out = a * b2");
-            eqB.process("b1_out = a * b1");
-            biases[3] = biases[3].minus(MatrixUtils.broadcast(eqB.lookupSimple("b3_out"), trainingDataCount));
-            biases[2] = biases[2].minus(MatrixUtils.broadcast(eqB.lookupSimple("b2_out"), trainingDataCount));
-            biases[1] = biases[1].minus(MatrixUtils.broadcast(eqB.lookupSimple("b1_out"), trainingDataCount));
+            // update weights & biases
+            for (int l = 1; l < layerNodes.length; l++) {
+                weights[l] = weights[l].minus(bpvs.get(l).weightGradient.scale(ALPHA));
+                biases[l] = biases[l].minus(MatrixUtils.broadcast(bpvs.get(l).biasGradient.scale(ALPHA), trainingDataCount));
+            }
         }
         System.out.printf("starting cost: %s%n", costHistory.getFirst());
-        System.out.printf("final cost: %s%n", costHistory.getLast());
+        System.out.printf("final cost: %s [epoch %s]%n", costHistory.getLast(), EPOCHS);
     }
 
     public static SimpleMatrix sigmoid(SimpleMatrix mat) {
