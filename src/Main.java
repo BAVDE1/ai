@@ -105,11 +105,9 @@ public class Main {
         }
     }
 
-    public static void main(String[] args) {
-        setupWeightsAndBiases();
-
+    public static void train() {
         for (int epoch = 0; epoch < EPOCHS; epoch++) {
-            SimpleMatrix yHat = feedForward(inputData);  // A3, the output, the clanker's prediction!
+            SimpleMatrix yHat = feedForward(inputData);  // A3, the output, the prediction!
 
             // find the error
             double cost = calcCost(yHat);
@@ -129,6 +127,12 @@ public class Main {
                 biases[l] = biases[l].minus(MatrixUtils.broadcast(bpvs.get(l).biasGradient.scale(ALPHA), trainingDataCount));
             }
         }
+    }
+
+    public static void main(String[] args) {
+        setupWeightsAndBiases();
+        train();
+
         System.out.printf("starting cost: %s%n", costHistory.getFirst());
         System.out.printf("final cost: %s [%s epochs]%n", costHistory.getLast(), EPOCHS);
     }
