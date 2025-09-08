@@ -192,7 +192,7 @@ public class Main {
 
     public static BackPropValues backPropOutputLayer(SimpleMatrix yHat) {
         int layer = layerNodes.length - 1;
-        SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);
+        SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);  // dC_AL
 
         Equation eq = new Equation();
         eq.alias(yHat, "yHat", outputLabels, "Y", trainingDataCount, "m");
@@ -207,13 +207,13 @@ public class Main {
     }
 
     public static BackPropValues backPropHiddenLayer(BackPropValues previousLayerValues, int layer) {
-        SimpleMatrix activatedValues = activationCache.get(layer);
-        SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);
+        SimpleMatrix activatedValues = activationCache.get(layer);  // dC_Al
+        SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);  // dC_A[l-1]
 
         // sigmoid derivation: sigmoid'(z) = sigmoid(z) * (1-sigmoid(z))
         Equation eq = new Equation();
-        eq.alias(activatedValues, "Al", previousLayerValues.propagator, "dC_dAl_m1");
-        eq.process("out = dC_dAl_m1 .* (Al .* (1 - Al))");  // .* is element-wise multiplication
+        eq.alias(activatedValues, "dC_Al", previousLayerValues.propagator, "dC_dAl_m1");
+        eq.process("out = dC_dAl_m1 .* (dC_Al .* (1 - dC_Al))");  // .* is element-wise multiplication
         SimpleMatrix dC_dZl = eq.lookupSimple("out");
 
         return new BackPropValues(
