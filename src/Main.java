@@ -98,6 +98,14 @@ public class Main {
         return out;
     }
 
+    public static void main(String[] args) {
+        setupWeightsAndBiases();
+        train();
+
+        System.out.printf("starting cost: %s%n", costHistory.getFirst());
+        System.out.printf("final cost: %s [%s epochs]%n", costHistory.getLast(), EPOCHS);
+    }
+
     public static void setupWeightsAndBiases() {
         for (int l = 1; l < layerNodes.length; l++) {
             weights[l] = MatrixUtils.randomGaussianMat(layerNodes[l], layerNodes[l-1]);
@@ -127,14 +135,6 @@ public class Main {
                 biases[l] = biases[l].minus(MatrixUtils.broadcast(bpvs.get(l).biasGradient.scale(ALPHA), trainingDataCount));
             }
         }
-    }
-
-    public static void main(String[] args) {
-        setupWeightsAndBiases();
-        train();
-
-        System.out.printf("starting cost: %s%n", costHistory.getFirst());
-        System.out.printf("final cost: %s [%s epochs]%n", costHistory.getLast(), EPOCHS);
     }
 
     public static SimpleMatrix sigmoid(SimpleMatrix mat) {
