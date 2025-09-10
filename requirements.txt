@@ -1,2 +1,2 @@
-java-lwjgl-boilerplate-2-0-2
+java-lwjgl-boilerplate-2-0-3
 ejml-v0.44.0-libs

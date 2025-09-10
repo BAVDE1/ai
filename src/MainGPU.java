@@ -180,24 +180,18 @@ public class MainGPU extends GameBase {
         for (int i = 0; i < weightOffset; i++) weights[i] = (float) new Random().nextGaussian();
         for (int i = 0; i < biasesOffset; i++) biases[i] = (float) new Random().nextGaussian();
 
-//        System.out.println(Arrays.toString(weights));
         ssbWeights.bufferData(weights);
-//        System.out.println(Arrays.toString(biases));
         ssbBiases.bufferData(biases);
-
-//        ssbBiases.bind();
-//        ByteBuffer out = MemoryUtil.memAlloc(biases.length * Float.BYTES);
-//        GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, out);
-//        System.out.println(out.asFloatBuffer().get(0));
 
         GL45.glDispatchCompute(trainingDataCount, 1, 1);
         GL45.glMemoryBarrier(GL45.GL_ALL_BARRIER_BITS);
-        System.out.println("done");
 
         ssbOutput.bind();
-        ByteBuffer out = MemoryUtil.memAlloc(layerNodes[layerNodes.length - 1] * trainingDataCount * Float.BYTES);
-        GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, out);
-        System.out.println(out.asFloatBuffer().get(1));
+        ByteBuffer output = MemoryUtil.memAlloc(layerNodes[layerNodes.length - 1] * trainingDataCount * Float.BYTES);
+        GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, output);
+        System.out.println(Arrays.toString(weights));
+        System.out.println(Arrays.toString(biases));
+        for (int i = 0; i < trainingDataCount; i++) System.out.println(output.asFloatBuffer().get(i));
     }
 
     public void trainNN() {

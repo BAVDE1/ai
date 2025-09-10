@@ -36,8 +36,8 @@ float sigmoid(float value) {
 
 float nodeValue(uint weightPos, uint biasPos, int prevLayerSize) {
     float val = 0;
-    for (uint n = 0; n < prevLayerSize; n++) {
-        val += weights[weightPos + n] * activationCache[n];
+    for (uint prevNeuronId = 0; prevNeuronId < prevLayerSize; prevNeuronId++) {
+        val += weights[weightPos + prevNeuronId] * activationCache[prevNeuronId];
     }
     val += biases[biasPos];
     return val;
@@ -49,13 +49,13 @@ void waitOnSync() {
 }
 
 void main() {
-    int size = layers[0].size;
     uint neuronId = gl_LocalInvocationID.x;
-    uint inputInx = gl_WorkGroupID.x * size;
+    uint inputId = gl_WorkGroupID.x;
+    int size = layers[0].size;
 
     // enter input values ready for layer 1
     if (neuronId < size) {
-        activationCache[neuronId] = inputs[inputInx + neuronId];
+        activationCache[neuronId] = inputs[(inputId * size) + neuronId];
     }
 
     // feed forward!
@@ -69,9 +69,9 @@ void main() {
         activationCache[neuronId] = sigmoid(value);
     }
 
-    // output the last layer's values
+    // output the last layer's activated values
     size = layers[LAYERS - 1].size;
     if (neuronId < size) {
-        outputs[inputInx + neuronId] = activationCache[neuronId];
+        outputs[(inputId * size) + neuronId] = activationCache[neuronId];
     }
 }
