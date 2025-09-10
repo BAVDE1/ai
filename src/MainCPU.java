@@ -4,7 +4,7 @@ import org.ejml.simple.SimpleMatrix;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class Main {
+public class MainCPU {
     static public class BackPropValues {
         SimpleMatrix weightGradient;
         SimpleMatrix biasGradient;

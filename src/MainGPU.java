@@ -3,20 +3,34 @@ import boilerplate.common.TimeStepper;
 import boilerplate.common.Window;
 import boilerplate.rendering.Renderer;
 import boilerplate.rendering.ShaderProgram;
+import boilerplate.rendering.buffers.ShaderStorageBuffer;
 import boilerplate.rendering.camera.Camera;
 import boilerplate.rendering.camera.CameraOrtho;
 import boilerplate.utility.Logging;
+import org.ejml.simple.SimpleMatrix;
 import org.joml.Vector2f;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL45;
+import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Random;
 
 public class MainGPU extends GameBase {
     Window window = new Window();
-    Camera camera = new CameraOrtho(new Vector2f(1));
+    Camera camera = new CameraOrtho(new Vector2f());
 
+    ShaderProgram runShader = new ShaderProgram();
     ShaderProgram trainingShader = new ShaderProgram();
+    ShaderProgram learningShader = new ShaderProgram();
+
+    static int trainingDataCount = 10;
+    static int[] layerNodes = new int[]{2, 3, 3, 1};
+
+    static float[] inputData = inputData();  // n0 by m
+    static SimpleMatrix outputLabels = outputLabels();  // n3 by m
 
     public static void main(String[] args) {
         System.setProperty("joml.format", "false");
@@ -32,15 +46,26 @@ public class MainGPU extends GameBase {
     @Override
     public void createCapabilitiesAndOpen() {
         Window.Options winOps = new Window.Options();
-        winOps.title = "the example index";
-        winOps.initWindowSize = new Dimension(100, 100);
+        winOps.title = "uwaaaaaa";
+        winOps.initWindowSize = new Dimension(200, 200);
         window.quickSetupAndShow(winOps);
         camera.setupUniformBuffer();
         bindEvents();
 
-        trainingShader.genProgram();
-        trainingShader.attachShader("res/train.glsl", GL45.GL_COMPUTE_SHADER);
-        trainingShader.linkProgram();
+        runShader.genProgram();
+        runShader.attachShader("res/run.glsl", GL45.GL_COMPUTE_SHADER);
+        runShader.linkProgram();
+
+        runNN();
+
+//        trainingShader.genProgram();
+//        trainingShader.attachShader("res/train.glsl", GL45.GL_COMPUTE_SHADER);
+//        trainingShader.linkProgram();
+//
+//        learningShader.genProgram();
+//        learningShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
+//        learningShader.linkProgram();
+//        trainNN();
     }
 
     public void bindEvents() {
@@ -51,6 +76,133 @@ public class MainGPU extends GameBase {
                 if (key == GLFW.GLFW_KEY_ESCAPE) this.window.setToClose();
             }
         });
+    }
+
+    // inputs: weight, height
+    public static float[] inputData() {
+        float[] out = new float[] {
+                150, 70,
+                254, 73,
+                312, 68,
+                120, 60,
+                154, 61,
+                212, 65,
+                216, 67,
+                145, 67,
+                184, 64,
+                130, 69
+        };
+
+        // find mean & deviation
+        double meanWeight = 0;
+        double meanHeight = 0;
+        for (int i = 0; i < trainingDataCount; i++) {
+            meanWeight += out[i * 2];
+            meanHeight += out[i * 2 + 1];
+        }
+        meanWeight /= trainingDataCount;
+        meanHeight /= trainingDataCount;
+
+        double deviationWeight = 0;
+        double deviationHeight = 0;
+        for (int i = 0; i < trainingDataCount; i++) {
+            deviationWeight += Math.pow(out[i * 2] - meanWeight, 2);
+            deviationHeight += Math.pow(out[i * 2 + 1] - meanHeight, 2);
+        }
+        deviationWeight = Math.sqrt(deviationWeight / trainingDataCount);
+        deviationHeight = Math.sqrt(deviationHeight / trainingDataCount);
+
+        // apply standard scaling
+        for (int i = 0; i < trainingDataCount; i++) {
+            out[i * 2] = (float) ((out[i * 2] - meanWeight) / deviationWeight);
+            out[i * 2 + 1] = (float) ((out[i * 2 + 1] - meanHeight) / deviationHeight);
+        }
+        return out;
+    }
+
+    public static SimpleMatrix outputLabels() {
+        SimpleMatrix out = SimpleMatrix.ones(layerNodes[layerNodes.length-1], trainingDataCount);
+        out.set(0, 0);
+        out.set(1, 1);
+        out.set(2, 1);
+        out.set(3, 0);
+        out.set(4, 0);
+        out.set(5, 1);
+        out.set(6, 1);
+        out.set(7, 0);
+        out.set(8, 1);
+        out.set(9, 0);
+        return out;
+    }
+
+    public static double calcCost(SimpleMatrix yHat) {
+        double summedLosses = 0;
+        for (int i = 0; i < trainingDataCount; i++) {
+            double yI = outputLabels.get(i);
+            double yHatI = yHat.get(i);
+            double loss = yI == 0 ? 1 - yHatI : yHatI;
+            summedLosses -= Math.log(loss);
+        }
+        return (1d / trainingDataCount) * summedLosses;
+    }
+
+    public void runNN() {
+        runShader.bind();
+
+        // send layer data
+        GL45.glUniform1i(runShader.getUniformLocation("layers[0].size"), layerNodes[0]);
+        int weightOffset = 0;
+        int biasesOffset = 0;
+        for (int l = 1; l < layerNodes.length; l++) {
+            GL45.glUniform1i(runShader.getUniformLocation("layers[%s].size".formatted(l)), layerNodes[l]);
+            GL45.glUniform1i(runShader.getUniformLocation("layers[%s].weightsOffset".formatted(l)), weightOffset);
+            GL45.glUniform1i(runShader.getUniformLocation("layers[%s].biasesOffset".formatted(l)), biasesOffset);
+            weightOffset += layerNodes[l-1] * layerNodes[l];
+            biasesOffset += layerNodes[l];
+        }
+
+        ShaderStorageBuffer ssbInputs = new ShaderStorageBuffer(true);
+        ssbInputs.bindShaderToBlock(0, runShader);
+        ssbInputs.bufferData(inputData);
+
+        ShaderStorageBuffer ssbWeights = new ShaderStorageBuffer(true);
+        ssbWeights.bindShaderToBlock(1, runShader);
+
+        ShaderStorageBuffer ssbBiases = new ShaderStorageBuffer(true);
+        ssbBiases.bindShaderToBlock(2, runShader);
+
+        ShaderStorageBuffer ssbOutput = new ShaderStorageBuffer(true);
+        ssbOutput.bindShaderToBlock(3, runShader);
+        ssbOutput.bufferSize(layerNodes[layerNodes.length-1] * trainingDataCount * Float.BYTES);
+
+        float[] weights = new float[weightOffset];
+        float[] biases = new float[biasesOffset];
+        for (int i = 0; i < weightOffset; i++) weights[i] = (float) new Random().nextGaussian();
+        for (int i = 0; i < biasesOffset; i++) biases[i] = (float) new Random().nextGaussian();
+
+//        System.out.println(Arrays.toString(weights));
+        ssbWeights.bufferData(weights);
+//        System.out.println(Arrays.toString(biases));
+        ssbBiases.bufferData(biases);
+
+//        ssbBiases.bind();
+//        ByteBuffer out = MemoryUtil.memAlloc(biases.length * Float.BYTES);
+//        GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, out);
+//        System.out.println(out.asFloatBuffer().get(0));
+
+        GL45.glDispatchCompute(trainingDataCount, 1, 1);
+        GL45.glMemoryBarrier(GL45.GL_ALL_BARRIER_BITS);
+        System.out.println("done");
+
+        ssbOutput.bind();
+        ByteBuffer out = MemoryUtil.memAlloc(layerNodes[layerNodes.length - 1] * trainingDataCount * Float.BYTES);
+        GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, out);
+        System.out.println(out.asFloatBuffer().get(1));
+    }
+
+    public void trainNN() {
+        trainingShader.bind();
+        GL45.glDispatchCompute(1, 1, 1);
     }
 
     @Override
