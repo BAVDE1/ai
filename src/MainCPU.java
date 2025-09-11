@@ -102,8 +102,14 @@ public class MainCPU {
         setupWeightsAndBiases();
         train();
 
-        System.out.printf("starting cost: %s%n", costHistory.getFirst());
+        System.out.printf("%nstarting cost: %s%n", costHistory.getFirst());
         System.out.printf("final cost: %s [%s epochs]%n", costHistory.getLast(), EPOCHS);
+
+        System.out.printf("%n[label, final prediction]%n");
+        SimpleMatrix finalPrediction = feedForward(inputData);
+        for (int i = 0; i < trainingDataCount; i++) {
+            System.out.printf("[%s, %.2f] ", outputLabels.get(i), finalPrediction.get(i));
+        }
     }
 
     public static void setupWeightsAndBiases() {

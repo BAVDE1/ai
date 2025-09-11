@@ -4,12 +4,6 @@
 
 layout (local_size_x = NEURONS, local_size_y = 1, local_size_z = 1) in;
 
-struct Layer {
-    int size;
-    int weightsOffset;
-    int biasesOffset;
-};
-
 layout(std430, binding = 0) buffer Input {
     float[] inputs;
 };
@@ -26,6 +20,12 @@ layout(std430, binding = 3) buffer Output {
     float[] outputs;
 };
 
+struct Layer {
+    int size;
+    int weightsOffset;
+    int biasesOffset;
+};
+
 uniform Layer[LAYERS] layers;
 
 shared float[NEURONS] activationCache;
@@ -34,7 +34,7 @@ float sigmoid(float value) {
     return 1 / (1 + exp(-1 * value));
 }
 
-float nodeValue(uint weightPos, uint biasPos, int prevLayerSize) {
+float neuronValue(uint weightPos, uint biasPos, int prevLayerSize) {
     float val = 0;
     for (uint prevNeuronId = 0; prevNeuronId < prevLayerSize; prevNeuronId++) {
         val += weights[weightPos + prevNeuronId] * activationCache[prevNeuronId];
@@ -60,11 +60,11 @@ void main() {
 
     // feed forward!
     for (int l = 1; l < LAYERS; l++) {
-        waitOnSync();
+        waitOnSync();  // previous layer must be fully completed & activated before calculating this layer
         size = layers[l - 1].size;  // the previous layer size
         uint weightPos = layers[l].weightsOffset + neuronId;
         uint biasPos = layers[l].biasesOffset + neuronId;
-        float value = nodeValue(weightPos, biasPos, size);
+        float value = neuronValue(weightPos, biasPos, size);
         waitOnSync();  // cause were using activationCache to find the value
         activationCache[neuronId] = sigmoid(value);
     }
