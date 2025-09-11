@@ -29,12 +29,14 @@ public class MainGPU extends GameBase {
     static int trainingDataCount = 10;
     static int[] layerNodes = new int[]{2, 3, 3, 1};
 
+    static float[] weights;
+    static float[] biases;
+
     static float[] inputData = inputData();  // n0 by m
     static SimpleMatrix outputLabels = outputLabels();  // n3 by m
 
     public static void main(String[] args) {
         System.setProperty("joml.format", "false");
-//        Logging.logDebug = false;
         new MainGPU().start();
     }
 
@@ -55,17 +57,15 @@ public class MainGPU extends GameBase {
         runShader.genProgram();
         runShader.attachShader("res/run.glsl", GL45.GL_COMPUTE_SHADER);
         runShader.linkProgram();
+        trainingShader.genProgram();
+        trainingShader.attachShader("res/train.glsl", GL45.GL_COMPUTE_SHADER);
+        trainingShader.linkProgram();
+        learningShader.genProgram();
+        learningShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
+        learningShader.linkProgram();
 
         runNN();
-
-//        trainingShader.genProgram();
-//        trainingShader.attachShader("res/train.glsl", GL45.GL_COMPUTE_SHADER);
-//        trainingShader.linkProgram();
-//
-//        learningShader.genProgram();
-//        learningShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
-//        learningShader.linkProgram();
-//        trainNN();
+        trainNN();
     }
 
     public void bindEvents() {
@@ -146,17 +146,24 @@ public class MainGPU extends GameBase {
         return (1d / trainingDataCount) * summedLosses;
     }
 
+    public static void randomizeWeightsAndBiases(int weightsCount, int biasesCount) {
+        weights = new float[weightsCount];
+        biases = new float[biasesCount];
+        for (int i = 0; i < weightsCount; i++) weights[i] = (float) new Random().nextGaussian();
+        for (int i = 0; i < biasesCount; i++) biases[i] = (float) new Random().nextGaussian();
+    }
+
     public void runNN() {
         runShader.bind();
 
         // send layer data
-        GL45.glUniform1i(runShader.getUniformLocation("layers[0].size"), layerNodes[0]);
+        runShader.uniform1i("layers[0].size", layerNodes[0]);
         int weightOffset = 0;
         int biasesOffset = 0;
         for (int l = 1; l < layerNodes.length; l++) {
-            GL45.glUniform1i(runShader.getUniformLocation("layers[%s].size".formatted(l)), layerNodes[l]);
-            GL45.glUniform1i(runShader.getUniformLocation("layers[%s].weightsOffset".formatted(l)), weightOffset);
-            GL45.glUniform1i(runShader.getUniformLocation("layers[%s].biasesOffset".formatted(l)), biasesOffset);
+            runShader.uniform1i("layers[%s].size".formatted(l), layerNodes[l]);
+            runShader.uniform1i("layers[%s].weightsOffset".formatted(l), weightOffset);
+            runShader.uniform1i("layers[%s].biasesOffset".formatted(l), biasesOffset);
             weightOffset += layerNodes[l-1] * layerNodes[l];
             biasesOffset += layerNodes[l];
         }
@@ -175,11 +182,7 @@ public class MainGPU extends GameBase {
         ssbOutput.bindShaderToBlock(3, runShader);
         ssbOutput.bufferSize(layerNodes[layerNodes.length-1] * trainingDataCount * Float.BYTES);
 
-        float[] weights = new float[weightOffset];
-        float[] biases = new float[biasesOffset];
-        for (int i = 0; i < weightOffset; i++) weights[i] = (float) new Random().nextGaussian();
-        for (int i = 0; i < biasesOffset; i++) biases[i] = (float) new Random().nextGaussian();
-
+        randomizeWeightsAndBiases(weightOffset, biasesOffset);
         ssbWeights.bufferData(weights);
         ssbBiases.bufferData(biases);
 
@@ -189,14 +192,15 @@ public class MainGPU extends GameBase {
         ssbOutput.bind();
         ByteBuffer output = MemoryUtil.memAlloc(layerNodes[layerNodes.length - 1] * trainingDataCount * Float.BYTES);
         GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, output);
-        System.out.println(Arrays.toString(weights));
-        System.out.println(Arrays.toString(biases));
         for (int i = 0; i < trainingDataCount; i++) System.out.println(output.asFloatBuffer().get(i));
     }
 
     public void trainNN() {
         trainingShader.bind();
-        GL45.glDispatchCompute(1, 1, 1);
+    }
+
+    public void learnNN() {
+        learningShader.bind();
     }
 
     @Override
