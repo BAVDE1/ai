@@ -39,9 +39,9 @@ struct BackpropValues {
 
 uniform Layer[LAYERS] layers;
 
-shared float[LAYERS][NEURONS] activationHistoryCache;  // history of all activated values of each neuron in each layer
+shared float[LAYERS][NEURONS] activationHistoryCache;  // history of all activated values for each neuron in each layer
 shared float[INPUT_DATA_COUNT] costCache;
-shared BackpropValues[LAYERS] backpropValues;
+shared BackpropValues[LAYERS][NEURONS] backpropValues;
 shared float cost;
 
 // binary cross entropy cost
@@ -88,12 +88,12 @@ void main() {
 
     // feed forward!
     for (int l = 1; l < LAYERS; l++) {
-        waitOnSync();  // previous layer must be fully completed & activated before calculating this layer
-        size = layers[l - 1].size;  // the previous layer size
+        waitOnSync();
+        size = layers[l - 1].size;
         uint weightPos = layers[l].weightsOffset + neuronId;
         uint biasPos = layers[l].biasesOffset + neuronId;
         float value = neuronValue(weightPos, biasPos, size, l);
-        waitOnSync();  // cause were using activationHistoryCache to find the value
+        waitOnSync();
         activationHistoryCache[l][neuronId] = sigmoid(value);
     }
 
@@ -104,7 +104,7 @@ void main() {
     costCache[inputId] = costBCE(prediction, actual);
     waitOnSync();
 
-    // just use one thread to calc cost average
+    // use one thread to calc cost average
     if (inputId == 0) {
         float totalCosts = 0;
         for (int i = 0; i < INPUT_DATA_COUNT; i++) totalCosts += costCache[i];
@@ -114,4 +114,5 @@ void main() {
 
     // calc backpropagation values (gradients)
 
+    // output backpropogation values for each layer
 }

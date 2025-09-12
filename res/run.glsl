@@ -60,12 +60,12 @@ void main() {
 
     // feed forward!
     for (int l = 1; l < LAYERS; l++) {
-        waitOnSync();  // previous layer must be fully completed & activated before calculating this layer
-        size = layers[l - 1].size;  // the previous layer size
+        waitOnSync();
+        size = layers[l - 1].size;
         uint weightPos = layers[l].weightsOffset + neuronId;
         uint biasPos = layers[l].biasesOffset + neuronId;
         float value = neuronValue(weightPos, biasPos, size);
-        waitOnSync();  // cause were using activationCache to find the value
+        waitOnSync();
         activationCache[neuronId] = sigmoid(value);
     }
 

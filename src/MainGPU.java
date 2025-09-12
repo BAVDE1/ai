@@ -156,7 +156,6 @@ public class MainGPU extends GameBase {
     public void runNN() {
         runShader.bind();
 
-        // send layer data
         runShader.uniform1i("layers[0].size", layerNodes[0]);
         int weightOffset = 0;
         int biasesOffset = 0;
@@ -168,29 +167,30 @@ public class MainGPU extends GameBase {
             biasesOffset += layerNodes[l];
         }
 
+        randomizeWeightsAndBiases(weightOffset, biasesOffset);
+
         ShaderStorageBuffer ssbInputs = new ShaderStorageBuffer(true);
         ssbInputs.bindShaderToBlock(0, runShader);
         ssbInputs.bufferData(inputData);
 
         ShaderStorageBuffer ssbWeights = new ShaderStorageBuffer(true);
         ssbWeights.bindShaderToBlock(1, runShader);
+        ssbWeights.bufferData(weights);
 
         ShaderStorageBuffer ssbBiases = new ShaderStorageBuffer(true);
         ssbBiases.bindShaderToBlock(2, runShader);
+        ssbBiases.bufferData(biases);
 
+        int outputSize = layerNodes[layerNodes.length-1] * trainingDataCount * Float.BYTES;
         ShaderStorageBuffer ssbOutput = new ShaderStorageBuffer(true);
         ssbOutput.bindShaderToBlock(3, runShader);
-        ssbOutput.bufferSize(layerNodes[layerNodes.length-1] * trainingDataCount * Float.BYTES);
-
-        randomizeWeightsAndBiases(weightOffset, biasesOffset);
-        ssbWeights.bufferData(weights);
-        ssbBiases.bufferData(biases);
+        ssbOutput.bufferSize(outputSize);
 
         GL45.glDispatchCompute(trainingDataCount, 1, 1);
         GL45.glMemoryBarrier(GL45.GL_ALL_BARRIER_BITS);
 
         ssbOutput.bind();
-        ByteBuffer output = MemoryUtil.memAlloc(layerNodes[layerNodes.length - 1] * trainingDataCount * Float.BYTES);
+        ByteBuffer output = MemoryUtil.memAlloc(outputSize);
         GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, output);
         for (int i = 0; i < trainingDataCount; i++) System.out.println(output.asFloatBuffer().get(i));
     }
