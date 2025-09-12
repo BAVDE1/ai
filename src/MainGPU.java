@@ -58,13 +58,13 @@ public class MainGPU extends GameBase {
         runShader.attachShader("res/run.glsl", GL45.GL_COMPUTE_SHADER);
         runShader.linkProgram();
         trainingShader.genProgram();
-        trainingShader.attachShader("res/train.glsl", GL45.GL_COMPUTE_SHADER);
+        trainingShader.attachShader("res/test.glsl", GL45.GL_COMPUTE_SHADER);
         trainingShader.linkProgram();
         learningShader.genProgram();
         learningShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
         learningShader.linkProgram();
 
-        runNN();
+//        runNN();
         trainNN();
     }
 
