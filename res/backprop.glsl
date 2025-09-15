@@ -62,12 +62,16 @@ float neuronValue(uint weightPos, uint biasPos, int prevLayerSize, int layerNum)
     return val;
 }
 
-BackpropValues backpropOutputLayer() {
-    return null;
+BackpropValues backpropOutputLayer(uint neuronId, uint inputId) {
+    int layer = LAYERS-1;
+    float activatedValuePrev = activationHistoryCache[layer][neuronId];  // dC_AL
+    float dC_dZl = (1 / INPUT_DATA_COUNT) * (activatedValuePrev - labels[inputId]);
+    // uuuuuh
+    return BackpropValues(0, 0, 0);
 }
 
-BackpropValues backpropLayer() {
-    return null;
+BackpropValues backpropLayer(int layer, uint neuronId) {
+    return BackpropValues(0, 0, 0);
 }
 
 // blocks until all threads have reached this call
@@ -104,7 +108,7 @@ void main() {
     costCache[inputId] = costBCE(prediction, actual);
     waitOnSync();
 
-    // use one thread to calc cost average
+    // use one thread to average costs
     if (inputId == 0) {
         float totalCosts = 0;
         for (int i = 0; i < INPUT_DATA_COUNT; i++) totalCosts += costCache[i];
@@ -112,7 +116,15 @@ void main() {
     }
     waitOnSync();
 
-    // calc backpropagation values (gradients)
+    // calc backpropagation values
+    backpropValues[LAYERS-1][neuronId] = backpropOutputLayer(neuronId, inputId);
+    for (int l = LAYERS-2; l > 0; l--) {
+        size = layers[l].size;
+        if (neuronId < size) {
+            backpropValues[l][neuronId] = backpropLayer(l, neuronId);
+        }
+        waitOnSync();
+    }
 
     // output backpropogation values for each layer
 }

@@ -15,7 +15,6 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Random;
 
 public class MainGPU extends GameBase {
@@ -23,8 +22,8 @@ public class MainGPU extends GameBase {
     Camera camera = new CameraOrtho(new Vector2f());
 
     ShaderProgram runShader = new ShaderProgram();
-    ShaderProgram trainingShader = new ShaderProgram();
-    ShaderProgram learningShader = new ShaderProgram();
+    ShaderProgram backpropShader = new ShaderProgram();
+    ShaderProgram learnShader = new ShaderProgram();
 
     static int trainingDataCount = 10;
     static int[] layerNodes = new int[]{2, 3, 3, 1};
@@ -57,12 +56,12 @@ public class MainGPU extends GameBase {
         runShader.genProgram();
         runShader.attachShader("res/run.glsl", GL45.GL_COMPUTE_SHADER);
         runShader.linkProgram();
-        trainingShader.genProgram();
-        trainingShader.attachShader("res/test.glsl", GL45.GL_COMPUTE_SHADER);
-        trainingShader.linkProgram();
-        learningShader.genProgram();
-        learningShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
-        learningShader.linkProgram();
+        backpropShader.genProgram();
+        backpropShader.attachShader("res/backprop.glsl", GL45.GL_COMPUTE_SHADER);
+        backpropShader.linkProgram();
+        learnShader.genProgram();
+        learnShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
+        learnShader.linkProgram();
 
 //        runNN();
         trainNN();
@@ -196,11 +195,11 @@ public class MainGPU extends GameBase {
     }
 
     public void trainNN() {
-        trainingShader.bind();
+        backpropShader.bind();
     }
 
     public void learnNN() {
-        learningShader.bind();
+        learnShader.bind();
     }
 
     @Override
