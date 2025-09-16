@@ -1,5 +1,6 @@
 #version 450 core
 #define INPUT_DATA_COUNT 10
+#define INPUT_DATA_COUNT_AVG 1 / INPUT_DATA_COUNT
 #define LAYERS 4
 #define NEURONS 3  // the count of neurons in the largest layer
 
@@ -40,6 +41,7 @@ struct BackpropValues {
 uniform Layer[LAYERS] layers;
 
 shared float[LAYERS][NEURONS] activationHistoryCache;  // history of all activated values for each neuron in each layer
+//shared float[LAYERS][NEURONS] activationHistoryCacheAvgs;
 shared float[INPUT_DATA_COUNT] costCache;
 shared BackpropValues[LAYERS][NEURONS] backpropValues;
 shared float cost;
@@ -64,8 +66,23 @@ float neuronValue(uint weightPos, uint biasPos, int prevLayerSize, int layerNum)
 
 BackpropValues backpropOutputLayer(uint neuronId, uint inputId) {
     int layer = LAYERS-1;
-    float activatedValuePrev = activationHistoryCache[layer][neuronId];  // dC_AL
-    float dC_dZl = (1 / INPUT_DATA_COUNT) * (activatedValuePrev - labels[inputId]);
+    int prevLayer = layer-1;
+    float activatedValue = activationHistoryCache[layer][neuronId];  // AL
+    float dC_dZLi = INPUT_DATA_COUNT_AVG * (activatedValue - labels[inputId]);
+
+    float dC_WLi = 0;
+    for (int i = 0; i < NEURONS; i++) {
+        if (i >= layers[prevLayer].size) break;
+        dC_WLi += dC_dZLi * activationHistoryCache[prevLayer][i];
+    }
+
+    // only use one thread to do bias
+    if (neuronId == 0) {
+
+    }
+    float dC_bLi = 0;
+
+//    float dC_dWL = dC_dZL *
     // uuuuuh
     return BackpropValues(0, 0, 0);
 }
