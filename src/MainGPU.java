@@ -4,6 +4,7 @@ import boilerplate.common.Window;
 import boilerplate.rendering.Renderer;
 import boilerplate.rendering.ShaderProgram;
 import boilerplate.rendering.buffers.ShaderStorageBuffer;
+import boilerplate.rendering.buffers.UniformBuffer;
 import boilerplate.rendering.camera.Camera;
 import boilerplate.rendering.camera.CameraOrtho;
 import boilerplate.utility.Logging;
@@ -15,6 +16,7 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.awt.*;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.util.Random;
 
 public class MainGPU extends GameBase {
@@ -22,7 +24,9 @@ public class MainGPU extends GameBase {
     Camera camera = new CameraOrtho(new Vector2f());
 
     ShaderProgram runShader = new ShaderProgram();
+    ShaderStorageBuffer[] runShaderInputs = new ShaderStorageBuffer[5];
     ShaderProgram backpropShader = new ShaderProgram();
+    ShaderStorageBuffer[] backpropShaderInputs = new ShaderStorageBuffer[4];
     ShaderProgram learnShader = new ShaderProgram();
 
     static int trainingDataCount = 10;
@@ -32,7 +36,7 @@ public class MainGPU extends GameBase {
     static float[] biases;
 
     static float[] inputData = inputData();  // n0 by m
-    static SimpleMatrix outputLabels = outputLabels();  // n3 by m
+    static float[] outputLabels = new float[] {0, 1, 1, 0, 0, 1, 1, 0, 1, 0};  // n3 by m
 
     public static void main(String[] args) {
         System.setProperty("joml.format", "false");
@@ -42,6 +46,27 @@ public class MainGPU extends GameBase {
     @Override
     public void start() {
         TimeStepper.startStaticTimeStepper(1d / 60d, this);
+    }
+
+    public int[] uniformLayers(ShaderProgram sh) {
+        sh.uniform1i("layers[0].size", layerNodes[0]);
+        int weightOffset = 0;
+        int biasesOffset = 0;
+        for (int l = 1; l < layerNodes.length; l++) {
+            sh.uniform1i("layers[%s].size".formatted(l), layerNodes[l]);
+            sh.uniform1i("layers[%s].weightsOffset".formatted(l), weightOffset);
+            sh.uniform1i("layers[%s].biasesOffset".formatted(l), biasesOffset);
+            weightOffset += layerNodes[l-1] * layerNodes[l];
+            biasesOffset += layerNodes[l];
+        }
+        return new int[] {weightOffset, biasesOffset};
+    }
+
+    public void initialiseStorageBuffers(ShaderStorageBuffer[] buffers, ShaderProgram sh) {
+        for (int i = 0; i < buffers.length; i++) {
+            buffers[i] = new ShaderStorageBuffer(true);
+            buffers[i].bindShaderToBlock(i, sh);
+        }
     }
 
     @Override
@@ -57,14 +82,22 @@ public class MainGPU extends GameBase {
         runShader.attachShader("res/run.glsl", GL45.GL_COMPUTE_SHADER);
         runShader.linkProgram();
         backpropShader.genProgram();
-        backpropShader.attachShader("res/backprop.glsl", GL45.GL_COMPUTE_SHADER);
+        backpropShader.attachShader("res/backprop2.glsl", GL45.GL_COMPUTE_SHADER);
         backpropShader.linkProgram();
-        learnShader.genProgram();
-        learnShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
-        learnShader.linkProgram();
+//        learnShader.genProgram();
+//        learnShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
+//        learnShader.linkProgram();
 
-//        runNN();
-        trainNN();
+        int[] sizes = uniformLayers(runShader);
+        uniformLayers(backpropShader);
+        randomizeWeightsAndBiases(sizes[0], sizes[1]);
+
+        initialiseStorageBuffers(runShaderInputs, runShader);
+        initialiseStorageBuffers(backpropShaderInputs, backpropShader);
+
+        FloatBuffer out = runNN();
+        for (int i = 0; i < trainingDataCount; i++) System.out.println(out.get(i));
+//        trainNN();
     }
 
     public void bindEvents() {
@@ -119,31 +152,16 @@ public class MainGPU extends GameBase {
         return out;
     }
 
-    public static SimpleMatrix outputLabels() {
-        SimpleMatrix out = SimpleMatrix.ones(layerNodes[layerNodes.length-1], trainingDataCount);
-        out.set(0, 0);
-        out.set(1, 1);
-        out.set(2, 1);
-        out.set(3, 0);
-        out.set(4, 0);
-        out.set(5, 1);
-        out.set(6, 1);
-        out.set(7, 0);
-        out.set(8, 1);
-        out.set(9, 0);
-        return out;
-    }
-
-    public static double calcCost(SimpleMatrix yHat) {
-        double summedLosses = 0;
-        for (int i = 0; i < trainingDataCount; i++) {
-            double yI = outputLabels.get(i);
-            double yHatI = yHat.get(i);
-            double loss = yI == 0 ? 1 - yHatI : yHatI;
-            summedLosses -= Math.log(loss);
-        }
-        return (1d / trainingDataCount) * summedLosses;
-    }
+//    public static double calcCost(SimpleMatrix yHat) {
+//        double summedLosses = 0;
+//        for (int i = 0; i < trainingDataCount; i++) {
+//            double yI = outputLabels.get(i);
+//            double yHatI = yHat.get(i);
+//            double loss = yI == 0 ? 1 - yHatI : yHatI;
+//            summedLosses -= Math.log(loss);
+//        }
+//        return (1d / trainingDataCount) * summedLosses;
+//    }
 
     public static void randomizeWeightsAndBiases(int weightsCount, int biasesCount) {
         weights = new float[weightsCount];
@@ -152,50 +170,32 @@ public class MainGPU extends GameBase {
         for (int i = 0; i < biasesCount; i++) biases[i] = (float) new Random().nextGaussian();
     }
 
-    public void runNN() {
+    public FloatBuffer runNN() {
         runShader.bind();
 
-        runShader.uniform1i("layers[0].size", layerNodes[0]);
-        int weightOffset = 0;
-        int biasesOffset = 0;
-        for (int l = 1; l < layerNodes.length; l++) {
-            runShader.uniform1i("layers[%s].size".formatted(l), layerNodes[l]);
-            runShader.uniform1i("layers[%s].weightsOffset".formatted(l), weightOffset);
-            runShader.uniform1i("layers[%s].biasesOffset".formatted(l), biasesOffset);
-            weightOffset += layerNodes[l-1] * layerNodes[l];
-            biasesOffset += layerNodes[l];
-        }
-
-        randomizeWeightsAndBiases(weightOffset, biasesOffset);
-
-        ShaderStorageBuffer ssbInputs = new ShaderStorageBuffer(true);
-        ssbInputs.bindShaderToBlock(0, runShader);
-        ssbInputs.bufferData(inputData);
-
-        ShaderStorageBuffer ssbWeights = new ShaderStorageBuffer(true);
-        ssbWeights.bindShaderToBlock(1, runShader);
-        ssbWeights.bufferData(weights);
-
-        ShaderStorageBuffer ssbBiases = new ShaderStorageBuffer(true);
-        ssbBiases.bindShaderToBlock(2, runShader);
-        ssbBiases.bufferData(biases);
-
         int outputSize = layerNodes[layerNodes.length-1] * trainingDataCount * Float.BYTES;
-        ShaderStorageBuffer ssbOutput = new ShaderStorageBuffer(true);
-        ssbOutput.bindShaderToBlock(3, runShader);
-        ssbOutput.bufferSize(outputSize);
+        runShaderInputs[0].bufferData(inputData);
+        runShaderInputs[1].bufferData(weights);
+        runShaderInputs[2].bufferData(biases);
+        runShaderInputs[3].bufferSize(outputSize);
+        runShaderInputs[4].bufferSize(outputSize);
 
         GL45.glDispatchCompute(trainingDataCount, 1, 1);
         GL45.glMemoryBarrier(GL45.GL_ALL_BARRIER_BITS);
 
-        ssbOutput.bind();
+        runShaderInputs[3].bind();
         ByteBuffer output = MemoryUtil.memAlloc(outputSize);
         GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, output);
-        for (int i = 0; i < trainingDataCount; i++) System.out.println(output.asFloatBuffer().get(i));
+        return output.asFloatBuffer();
     }
 
     public void trainNN() {
+        FloatBuffer outputs = runNN();
         backpropShader.bind();
+        backpropShaderInputs[0].bufferData(outputs);
+        backpropShaderInputs[1].bufferData(outputLabels);
+        backpropShaderInputs[2].bufferData(weights);
+        backpropShaderInputs[3].bufferData(biases);
     }
 
     public void learnNN() {
