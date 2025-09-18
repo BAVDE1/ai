@@ -128,8 +128,16 @@ void backpropOutputLayer(uint neuronId, uint inputId) {
 //    return BackpropValues(dC_WLi, 0, 0);
 }
 
-void backpropLayer(int layer, uint neuronId, uint inputId) {
+void backpropLayer(int layerInx, uint neuronId, uint inputId) {
+    int prevLayerInx = layerInx-1;
+    Layer layer = layers[layerInx];
+    Layer prevLayer = layers[prevLayerInx];
+    float activatedValue = activationHistoryCache[layerInx][neuronId];  // AL
 
+    float propagator = propagators[neuronId];  // dC_dZ_p1
+    float dC_dZLi = propagator * (activatedValue * (1 - activatedValue));  // using sigmoid derivative
+
+    waitOnSync();  // wait before assinging new propagators
 }
 
 void main() {

@@ -218,8 +218,8 @@ public class MainCPU {
 
         // derivation: sigmoid'(z) = sigmoid(z) * (1-sigmoid(z))
         Equation eq = new Equation();
-        eq.alias(activatedValues, "dC_Al", previousLayerValues.propagator, "dC_dAl_m1");
-        eq.process("out = dC_dAl_m1 .* (dC_Al .* (1 - dC_Al))");  // uses derivative of sigmoid, .* is element-wise multiplication
+        eq.alias(activatedValues, "dC_Al", previousLayerValues.propagator, "dC_dAl_p1");
+        eq.process("out = dC_dAl_p1 .* (dC_Al .* (1 - dC_Al))");  // uses derivative of sigmoid, .* is element-wise multiplication
         SimpleMatrix dC_dZl = eq.lookupSimple("out");
 
         return new BackPropValues(
