@@ -216,10 +216,10 @@ public class MainCPU {
         SimpleMatrix activatedValues = activationCache.get(layer);  // dC_Al
         SimpleMatrix activatedValuesPrev = activationCache.get(layer - 1);  // dC_A[l-1]
 
-        // sigmoid derivation: sigmoid'(z) = sigmoid(z) * (1-sigmoid(z))
+        // derivation: sigmoid'(z) = sigmoid(z) * (1-sigmoid(z))
         Equation eq = new Equation();
         eq.alias(activatedValues, "dC_Al", previousLayerValues.propagator, "dC_dAl_m1");
-        eq.process("out = dC_dAl_m1 .* (dC_Al .* (1 - dC_Al))");  // .* is element-wise multiplication
+        eq.process("out = dC_dAl_m1 .* (dC_Al .* (1 - dC_Al))");  // uses derivative of sigmoid, .* is element-wise multiplication
         SimpleMatrix dC_dZl = eq.lookupSimple("out");
 
         return new BackPropValues(

@@ -82,7 +82,7 @@ public class MainGPU extends GameBase {
         runShader.attachShader("res/run.glsl", GL45.GL_COMPUTE_SHADER);
         runShader.linkProgram();
         backpropShader.genProgram();
-        backpropShader.attachShader("res/backprop2.glsl", GL45.GL_COMPUTE_SHADER);
+        backpropShader.attachShader("res/backprop.glsl", GL45.GL_COMPUTE_SHADER);
         backpropShader.linkProgram();
 //        learnShader.genProgram();
 //        learnShader.attachShader("res/learn.glsl", GL45.GL_COMPUTE_SHADER);
@@ -196,6 +196,10 @@ public class MainGPU extends GameBase {
         backpropShaderInputs[1].bufferData(outputLabels);
         backpropShaderInputs[2].bufferData(weights);
         backpropShaderInputs[3].bufferData(biases);
+
+        int outputSize = trainingDataCount * layerNodes.length * 3 * Float.BYTES;
+        backpropShaderInputs[4].bufferSize(outputSize);  // weights grads
+        backpropShaderInputs[5].bufferSize(outputSize);  // biases grads
     }
 
     public void learnNN() {

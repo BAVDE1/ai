@@ -1,5 +1,6 @@
 #version 450 core
 #define INPUT_DATA_COUNT 10
+#define INPUT_DATA_COUNT_AVG 1 / INPUT_DATA_COUNT
 #define LAYERS 4
 #define NEURONS 3  // the count of neurons in the largest layer
 
@@ -29,9 +30,9 @@ layout(std430, binding = 5) buffer BiasOutput {
     float[] biasOutputs;
 };
 
-layout(std430, binding = 6) buffer PropagatorOutput {
-    float[] propagatorOutputs;
-};
+//layout(std430, binding = 6) buffer PropagatorOutput {
+//    float[] propagatorOutputs;
+//};
 
 struct Layer {
     int size;
@@ -49,10 +50,11 @@ uniform Layer[LAYERS] layers;
 
 shared float[LAYERS][NEURONS] activationHistoryCache;  // history of all activated values for each neuron in each layer
 //shared float[LAYERS][NEURONS] activationHistoryCacheAvgs;
-shared BackpropValues[LAYERS][NEURONS] backpropValues;
+//shared BackpropValues[LAYERS][NEURONS] backpropValues;
 
 shared float[LAYERS][NEURONS] weightGradients;
 shared float[LAYERS][NEURONS] biasGradients;
+shared float[NEURONS][NEURONS] propagatorsCache;
 shared float[NEURONS] propagators;
 
 shared float[NEURONS] costCache;
@@ -76,25 +78,44 @@ float neuronValue(uint weightPos, uint biasPos, int prevLayerSize, int layerNum)
     return val;
 }
 
+// blocks until all threads have reached this call
+void waitOnSync() {
+    memoryBarrierShared();
+    barrier();
+}
+
 void backpropOutputLayer(uint neuronId, uint inputId) {
-    int layer = LAYERS-1;
-    int prevLayer = layer-1;
-    float activatedValue = activationHistoryCache[layer][neuronId];  // AL
-    float dC_dZLi = activatedValue - labels[inputId];  // error
+    int layerInx = LAYERS-1;
+    int prevLayerInx = layerInx-1;
+    Layer layer = layers[layerInx];
+    Layer prevLayer = layers[prevLayerInx];
+    float activatedValue = activationHistoryCache[layerInx][neuronId];  // AL
+    float dC_dZLi = INPUT_DATA_COUNT_AVG * (activatedValue - labels[inputId]);  // error
 
 //    float[] dC_WLi;
-    for (int i = 0; i < layers[prevLayer].size; i++) {
-        weightGradients[layer][neuronId] += dC_dZLi * activationHistoryCache[prevLayer][i];
+    for (int i = 0; i < prevLayer.size; i++) {
+        weightGradients[layerInx][neuronId] += dC_dZLi * activationHistoryCache[prevLayerInx][i];
     }
 
     // bias is done in learn
-    biasGradients[layer][neuronId] = dC_dZLi;
+    biasGradients[layerInx][neuronId] = dC_dZLi;
 
-    float propagator = 0;
-//    for (int i = 0; i < layers[layer].size; i++) {
-//        propagator +=
-//    }
-    propagators[neuronId] = propagator;
+//    float propagator = 0;
+    for (int i = 0; i < prevLayer.size; i++) {
+        propagatorsCache[neuronId][i] = weights[layer.weightsOffset + i] * dC_dZLi;
+    }
+    waitOnSync();
+
+    // add together atomically
+    if (neuronId == 0) {
+        for (int li = 0; li < layer.size; li++) {
+            for (int i = 0; i < prevLayer.size; i++) {
+                propagators[i] += propagatorsCache[li][i];
+            }
+        }
+    }
+    waitOnSync();
+//    propagators[neuronId] = propagator;
 //    if (neuronId == 0) {
 //        for (int l = 0; l < layers[layer].size; l++) {
 //            biasGradients[layer][neuronId] += dC_dZLi;
@@ -107,14 +128,8 @@ void backpropOutputLayer(uint neuronId, uint inputId) {
 //    return BackpropValues(dC_WLi, 0, 0);
 }
 
-BackpropValues backpropLayer(int layer, uint neuronId) {
-    return BackpropValues(0, 0, 0);
-}
+void backpropLayer(int layer, uint neuronId, uint inputId) {
 
-// blocks until all threads have reached this call
-void waitOnSync() {
-    memoryBarrierShared();
-    barrier();
 }
 
 void main() {
@@ -154,14 +169,13 @@ void main() {
     waitOnSync();
 
     // calc backpropagation values
-//    backpropValues[LAYERS-1][neuronId] = backpropOutputLayer(neuronId, inputId);
-//    for (int l = LAYERS-2; l > 0; l--) {
-//        size = layers[l].size;
-//        if (neuronId < size) {
-//            backpropValues[l][neuronId] = backpropLayer(l, neuronId);
-//        }
-//        waitOnSync();
-//    }
+    backpropOutputLayer(neuronId, inputId);
+    for (int l = LAYERS-2; l > 0; l--) {
+        if (neuronId < layers[l].size) {
+            backpropLayer(l, neuronId, inputId);
+        }
+        waitOnSync();
+    }
 
     // output backpropogation values for each layer
 }
