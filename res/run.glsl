@@ -16,12 +16,8 @@ layout(std430, binding = 2) buffer Bias {
     float[] biases;
 };
 
-layout(std430, binding = 3) buffer OutputA {
+layout(std430, binding = 3) buffer Output {
     float[] outputs;
-};
-
-layout(std430, binding = 4) buffer OutputB {
-    float[] activationHistoryOutput;
 };
 
 struct Layer {
@@ -33,8 +29,6 @@ struct Layer {
 uniform Layer[LAYERS] layers;
 
 shared float[NEURONS] activationCache;
-// goddamit
-shared float[LAYERS][NEURONS] activationHistoryCache;  // history of all activated values for each neuron in each layer
 
 float sigmoid(float value) {
     return 1 / (1 + exp(-1 * value));

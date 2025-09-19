@@ -17,6 +17,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.awt.*;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.Arrays;
 import java.util.Random;
 
 public class MainGPU extends GameBase {
@@ -24,9 +25,9 @@ public class MainGPU extends GameBase {
     Camera camera = new CameraOrtho(new Vector2f());
 
     ShaderProgram runShader = new ShaderProgram();
-    ShaderStorageBuffer[] runShaderInputs = new ShaderStorageBuffer[5];
+    ShaderStorageBuffer[] runShaderInputs = new ShaderStorageBuffer[4];
     ShaderProgram backpropShader = new ShaderProgram();
-    ShaderStorageBuffer[] backpropShaderInputs = new ShaderStorageBuffer[4];
+    ShaderStorageBuffer[] backpropShaderInputs = new ShaderStorageBuffer[7];
     ShaderProgram learnShader = new ShaderProgram();
 
     static int trainingDataCount = 10;
@@ -62,10 +63,10 @@ public class MainGPU extends GameBase {
         return new int[] {weightOffset, biasesOffset};
     }
 
-    public void initialiseStorageBuffers(ShaderStorageBuffer[] buffers, ShaderProgram sh) {
+    public void initialiseStorageBuffers(int startingBinding, ShaderStorageBuffer[] buffers, ShaderProgram sh) {
         for (int i = 0; i < buffers.length; i++) {
             buffers[i] = new ShaderStorageBuffer(true);
-            buffers[i].bindShaderToBlock(i, sh);
+            buffers[i].bindShaderToBlock(i + startingBinding, sh);
         }
     }
 
@@ -92,12 +93,12 @@ public class MainGPU extends GameBase {
         uniformLayers(backpropShader);
         randomizeWeightsAndBiases(sizes[0], sizes[1]);
 
-        initialiseStorageBuffers(runShaderInputs, runShader);
-        initialiseStorageBuffers(backpropShaderInputs, backpropShader);
+        initialiseStorageBuffers(0, runShaderInputs, runShader);
+        initialiseStorageBuffers(runShaderInputs.length, backpropShaderInputs, backpropShader);
 
-        FloatBuffer out = runNN();
-        for (int i = 0; i < trainingDataCount; i++) System.out.println(out.get(i));
-//        trainNN();
+//        FloatBuffer out = runNN();
+//        for (int i = 0; i < trainingDataCount; i++) System.out.println(out.get(i));
+        trainNN();
     }
 
     public void bindEvents() {
@@ -178,28 +179,34 @@ public class MainGPU extends GameBase {
         runShaderInputs[1].bufferData(weights);
         runShaderInputs[2].bufferData(biases);
         runShaderInputs[3].bufferSize(outputSize);
-        runShaderInputs[4].bufferSize(outputSize);
 
         GL45.glDispatchCompute(trainingDataCount, 1, 1);
         GL45.glMemoryBarrier(GL45.GL_ALL_BARRIER_BITS);
 
-        runShaderInputs[3].bind();
-        ByteBuffer output = MemoryUtil.memAlloc(outputSize);
-        GL45.glGetBufferSubData(GL45.GL_SHADER_STORAGE_BUFFER, 0, output);
-        return output.asFloatBuffer();
+        return runShaderInputs[3].getData(outputSize).asFloatBuffer();
     }
 
     public void trainNN() {
-        FloatBuffer outputs = runNN();
         backpropShader.bind();
-        backpropShaderInputs[0].bufferData(outputs);
+        backpropShaderInputs[0].bufferData(inputData);
         backpropShaderInputs[1].bufferData(outputLabels);
         backpropShaderInputs[2].bufferData(weights);
         backpropShaderInputs[3].bufferData(biases);
 
-        int outputSize = trainingDataCount * layerNodes.length * 3 * Float.BYTES;
-        backpropShaderInputs[4].bufferSize(outputSize);  // weights grads
-        backpropShaderInputs[5].bufferSize(outputSize);  // biases grads
+        int outputGradsSize = trainingDataCount * layerNodes.length * 3 * Float.BYTES;
+        backpropShaderInputs[4].bufferSize(outputGradsSize);
+        backpropShaderInputs[5].bufferSize(outputGradsSize);
+
+        int outputSize = layerNodes[layerNodes.length-1] * trainingDataCount * Float.BYTES;
+        backpropShaderInputs[6].bufferSize(outputSize);
+
+        GL45.glDispatchCompute(trainingDataCount, 1, 1);
+        GL45.glMemoryBarrier(GL45.GL_ALL_BARRIER_BITS);
+
+//        FloatBuffer out = backpropShaderInputs[6].getData(outputSize).asFloatBuffer();
+        FloatBuffer weightOutput = backpropShaderInputs[4].getData(outputGradsSize).asFloatBuffer();
+        FloatBuffer biasOutput = backpropShaderInputs[5].getData(outputGradsSize).asFloatBuffer();
+        for (int i = 0; i < outputGradsSize / Float.BYTES; i++) System.out.println(weightOutput.get(i));
     }
 
     public void learnNN() {
