@@ -30,9 +30,9 @@ layout(std430, binding = 9) buffer BiasOutput {
     float[] biasOutputs;
 };
 
-layout(std430, binding = 10) buffer Output {
-    float[] outputs;
-};
+//layout(std430, binding = 10) buffer Output {
+//    float[] outputs;
+//};
 
 //layout(std430, binding = 6) buffer PropagatorOutput {
 //    float[] propagatorOutputs;
@@ -93,6 +93,8 @@ void backpropOutputLayer(uint neuronId, uint inputId) {
     int prevLayerInx = layerInx-1;
     Layer layer = layers[layerInx];
     Layer prevLayer = layers[prevLayerInx];
+    if (layer.size <= neuronId) return;
+
     float activatedValue = activationHistoryCache[layerInx][neuronId];  // AL
     float dC_dZLi = INPUT_DATA_COUNT_AVG * (activatedValue - labels[inputId]);  // error
 
@@ -136,9 +138,10 @@ void backpropLayer(int layerInx, uint neuronId, uint inputId) {
     int prevLayerInx = layerInx-1;
     Layer layer = layers[layerInx];
     Layer prevLayer = layers[prevLayerInx];
-    float activatedValue = activationHistoryCache[layerInx][neuronId];  // Al
+    if (layer.size <= neuronId) return;
 
     float propagator = propagators[neuronId];  // dC_dZ_p1
+    float activatedValue = activationHistoryCache[layerInx][neuronId];  // Al
     float dC_dZli = propagator * (activatedValue * (1 - activatedValue));  // using sigmoid derivative
 
     for (int i = 0; i < prevLayer.size; i++) {
@@ -218,8 +221,8 @@ void main() {
     for (int l = 0; l < LAYERS; l++) {
         uint layerInx = l * NEURONS;
 //        for (int n = 0; n < NEURONS; n++) {
-        weightOutputs[inputInx + layerInx + neuronId] = weightGradients[l][neuronId];
-        biasOutputs[inputInx + layerInx + neuronId] = biasGradients[l][neuronId];
+            weightOutputs[inputInx + layerInx + neuronId] = weightGradients[l][neuronId];
 //        }
+        biasOutputs[inputInx + layerInx + neuronId] = biasGradients[l][neuronId];
     }
 }
